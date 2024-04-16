@@ -8,6 +8,7 @@ from aphrodite.modeling.layers.quantization.bitsandbytes import \
     BitsandBytesConfig
 from aphrodite.modeling.layers.quantization.eetq import EETQConfig
 from aphrodite.modeling.layers.quantization.exl2 import Exl2Config
+from aphrodite.modeling.layers.quantization.fp8 import FP8Config
 from aphrodite.modeling.layers.quantization.gguf import GGUFConfig
 from aphrodite.modeling.layers.quantization.gptq import GPTQConfig
 from aphrodite.modeling.layers.quantization.marlin import MarlinConfig
@@ -20,6 +21,7 @@ _QUANTIZATION_CONFIG_REGISTRY = {
     "bnb": BitsandBytesConfig,
     "eetq": EETQConfig,
     "exl2": Exl2Config,
+    "fp8": FP8Config,
     "gguf": GGUFConfig,
     "gptq": GPTQConfig,
     "quip": QuipConfig,

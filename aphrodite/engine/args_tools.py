@@ -317,6 +317,7 @@ class EngineArgs:
                 "bnb",
                 "eetq",
                 "exl2",
+                "fp8",
                 "gguf",
                 "gptq",
                 "quip",
