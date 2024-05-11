@@ -144,6 +144,14 @@ override_gpu_arches(APHRODITE_GPU_ARCHES
 #
 get_torch_gpu_compiler_flags(APHRODITE_GPU_FLAGS ${APHRODITE_GPU_LANG})
 
+
+#
+# Suppress warnings
+#
+if (APHRODITE_GPU_LANG STREQUAL "CUDA")
+  list(APPEND APHRODITE_GPU_FLAGS "-diag-suppress 177")
+endif()
+
 #
 # Set nvcc parallelism.
 #
