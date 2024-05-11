@@ -100,6 +100,7 @@ function (get_torch_gpu_compiler_flags OUT_GPU_FLAGS GPU_LANG)
 
     if (CUDA_VERSION VERSION_GREATER_EQUAL 11.8)
       list(APPEND GPU_FLAGS "-DENABLE_FP8_E5M2")
+      list(APPEND GPU_FLAGS "-diag-suppress 177")
     endif()
     if (CUDA_VERSION VERSION_GREATER_EQUAL 12.0)
       list(REMOVE_ITEM GPU_FLAGS
