@@ -29,6 +29,16 @@ APHRODITE_USE_MODELSCOPE = os.environ.get("APHRODITE_USE_MODELSCOPE",
 _GB = 1 << 30
 _EMBEDDING_MODEL_MAX_NUM_BATCHED_TOKENS = 32768
 
+_PP_SUPPORTED_MODELS = [
+    "AquilaModel",
+    "AquilaForCausalLM",
+    "InternLMForCausalLM",
+    "LlamaForCausalLM",
+    "LLaMAForCausalLM",
+    "MistralForCausalLM",
+    "Phi3ForCausalLM",
+]
+
 
 class ModelConfig:
     """Configuration for the model.
@@ -338,6 +348,13 @@ class ModelConfig:
         total_num_hidden_layers = getattr(self.hf_text_config,
                                           "num_hidden_layers", 0)
         pipeline_parallel_size = parallel_config.pipeline_parallel_size
+        architectures = getattr(self.hf_config, "architectures", [])
+        if not all(arch in _PP_SUPPORTED_MODELS
+                   for arch in architectures) and pipeline_parallel_size > 1:
+            raise NotImplementedError(
+                "Pipeline parallelism is only supported for the following "
+                f" architectures: {_PP_SUPPORTED_MODELS}.")
+
         if total_num_hidden_layers % pipeline_parallel_size != 0:
             raise ValueError(
                 f"Total number of hidden layers ({total_num_hidden_layers}) "
@@ -747,9 +764,10 @@ class ParallelConfig:
         self._verify_args()
 
     def _verify_args(self) -> None:
-        if self.pipeline_parallel_size > 1:
-            raise NotImplementedError(
-                "Pipeline parallelism is not supported yet.")
+        if (self.pipeline_parallel_size > 1
+                and self.distributed_executor_backend == "mp"):
+            raise NotImplementedError("Pipeline parallelism is not supported "
+                                      "yet with multiprocessing.")
         if self.distributed_executor_backend not in ("ray", "mp", None):
             raise ValueError(
                 "Unrecognized distributed executor backend. Supported values "
@@ -1038,12 +1056,6 @@ class SpeculativeConfig:
             )
 
             draft_hf_config = draft_model_config.hf_config
-            if (draft_hf_config.model_type == "mlp_speculator"
-                    and target_parallel_config.world_size != 1):
-                # MLPSpeculator TP support will be added very soon
-                raise ValueError(
-                    "Speculative decoding with mlp_speculator models does not "
-                    "yet support distributed inferencing (TP > 1).")
 
             if (num_speculative_tokens is not None
                     and hasattr(draft_hf_config, "num_lookahead_tokens")):
@@ -1329,28 +1341,12 @@ class LoRAConfig:
             raise ValueError("LoRA is not supported with chunked prefill yet.")
 
 
+# TODO: Replace with MultiModalConfig.
 @dataclass
 class VisionLanguageConfig:
     """Configs the input data format and how models should run for
     vision language models."""
 
-    class ImageInputType(enum.Enum):
-        """Image input type into the vision language model.
-
-        An image roughly goes through the following transformation:
-        Raw image --> pixel values --> image features --> image embeddings.
-
-        The difference between different image input types is where the
-        image encoder (pixel values --> image features) is run.
-        Different image input types also correspond to different tensor shapes.
-
-        For example, for Llava, PIXEL_VALUES: (1, 3, 336, 336).
-        IMAGE_FEATURES: (1, 576, 1024).
-        """
-        PIXEL_VALUES = enum.auto()
-        IMAGE_FEATURES = enum.auto()
-
-    image_input_type: ImageInputType
     # The input id corresponding to image token.
     image_token_id: int
     # Used for running `run_prefill_max_token`.
@@ -1358,20 +1354,6 @@ class VisionLanguageConfig:
     # worst case scenario (biggest supported resolution).
     image_input_shape: tuple
     image_feature_size: int
-    # The image processor to load from HuggingFace
-    image_processor: Optional[str]
-    image_processor_revision: Optional[str]
-
-    @classmethod
-    def get_image_input_enum_type(
-            cls, value: str) -> "VisionLanguageConfig.ImageInputType":
-        """Get the image input type from a string."""
-        try:
-            return cls.ImageInputType[value.upper()]
-        except KeyError as e:
-            raise ValueError(f"{value} is not a valid choice. "
-                             f"Expecting to choose from "
-                             f"{[x.name for x in cls.ImageInputType]}.") from e
 
     def as_cli_args_dict(self) -> Dict[str, Any]:
         """Flatten vision language config to pure args.
@@ -1386,8 +1368,6 @@ class VisionLanguageConfig:
                 result[f.name] = ",".join([str(item) for item in value])
             else:
                 result[f.name] = value
-
-        result["disable_image_processor"] = self.image_processor is None
 
         return result
 
